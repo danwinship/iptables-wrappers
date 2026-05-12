@@ -28,10 +28,11 @@ import (
 	"strings"
 	"time"
 
-	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	utilexec "k8s.io/utils/exec"
 	utiltrace "k8s.io/utils/trace"
+
+	utilwait "sigs.k8s.io/iptables-wrappers/internal/wait"
 )
 
 // RulePosition holds the -I/-A flags for iptable
