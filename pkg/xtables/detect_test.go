@@ -17,13 +17,56 @@ limitations under the License.
 package xtables
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
 	utilexec "k8s.io/utils/exec"
 	fakeexec "k8s.io/utils/exec/testing"
 )
+
+const rulesWithIPTablesHint = `# Blah blah blah
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:DOCKER - [0:0]
+:DOCKER-BRIDGE - [0:0]
+:DOCKER-FORWARD - [0:0]
+:KUBE-IPTABLES-HINT - [0:0]
+-A FORWARD -j DOCKER-FORWARD
+-A DOCKER ! -i br-309f9ae3f545 -o br-309f9ae3f545 -j DROP
+-A DOCKER ! -i docker0 -o docker0 -j DROP
+-A DOCKER-BRIDGE -o br-309f9ae3f545 -j DOCKER
+-A DOCKER-BRIDGE -o docker0 -j DOCKER
+-A DOCKER-FORWARD -j DOCKER-BRIDGE
+-A DOCKER-FORWARD -i br-309f9ae3f545 -j ACCEPT
+-A DOCKER-FORWARD -i br-362465bc55a2 -o br-362465bc55a2 -j ACCEPT
+-A DOCKER-FORWARD -i docker0 -j ACCEPT
+COMMIT
+`
+
+const rulesWithoutIPTablesHint = `# Blah blah blah
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:DOCKER - [0:0]
+:DOCKER-BRIDGE - [0:0]
+:DOCKER-FORWARD - [0:0]
+-A FORWARD -j DOCKER-FORWARD
+-A DOCKER ! -i br-309f9ae3f545 -o br-309f9ae3f545 -j DROP
+-A DOCKER ! -i docker0 -o docker0 -j DROP
+-A DOCKER-BRIDGE -o br-309f9ae3f545 -j DOCKER
+-A DOCKER-BRIDGE -o docker0 -j DOCKER
+-A DOCKER-FORWARD -j DOCKER-BRIDGE
+-A DOCKER-FORWARD -i br-309f9ae3f545 -j ACCEPT
+-A DOCKER-FORWARD -i br-362465bc55a2 -o br-362465bc55a2 -j ACCEPT
+-A DOCKER-FORWARD -i docker0 -j ACCEPT
+COMMIT
+`
 
 type testCommand struct {
 	command string
@@ -39,7 +82,10 @@ func fakeExecForCommands(commands []testCommand) *fakeexec.FakeExec {
 	}
 	for i := range commands {
 		fcmd := fakeexec.FakeCmd{
-			RunScript: []fakeexec.FakeAction{func() ([]byte, []byte, error) { return []byte(commands[i].stdout), nil, commands[i].err }},
+			RunScript: []fakeexec.FakeAction{func() ([]byte, []byte, error) { return nil, nil, commands[i].err }},
+			StdoutPipeResponse: fakeexec.FakeStdIOPipeResponse{
+				ReadCloser: io.NopCloser(strings.NewReader(commands[i].stdout)),
+			},
 		}
 		argv := strings.Fields(commands[i].command)
 		fexec.CommandScript[i] = func(cmd string, args ...string) utilexec.Cmd {
@@ -214,26 +260,7 @@ func TestDetectMode(t *testing.T) {
 			commands: []testCommand{
 				{
 					command: "/sbin/iptables-nft-save -t mangle",
-					stdout:  `# Blah blah blah
-*filter
-:INPUT ACCEPT [0:0]
-:FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [0:0]
-:DOCKER - [0:0]
-:DOCKER-BRIDGE - [0:0]
-:DOCKER-FORWARD - [0:0]
-:KUBE-IPTABLES-HINT - [0:0]
--A FORWARD -j DOCKER-FORWARD
--A DOCKER ! -i br-309f9ae3f545 -o br-309f9ae3f545 -j DROP
--A DOCKER ! -i docker0 -o docker0 -j DROP
--A DOCKER-BRIDGE -o br-309f9ae3f545 -j DOCKER
--A DOCKER-BRIDGE -o docker0 -j DOCKER
--A DOCKER-FORWARD -j DOCKER-BRIDGE
--A DOCKER-FORWARD -i br-309f9ae3f545 -j ACCEPT
--A DOCKER-FORWARD -i br-362465bc55a2 -o br-362465bc55a2 -j ACCEPT
--A DOCKER-FORWARD -i docker0 -j ACCEPT
-COMMIT
-`,
+					stdout:  rulesWithIPTablesHint,
 				},
 			},
 			mode: NFTMode,
@@ -243,25 +270,7 @@ COMMIT
 			commands: []testCommand{
 				{
 					command: "/sbin/iptables-nft-save -t mangle",
-					stdout:  `# Blah blah blah
-*filter
-:INPUT ACCEPT [0:0]
-:FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [0:0]
-:DOCKER - [0:0]
-:DOCKER-BRIDGE - [0:0]
-:DOCKER-FORWARD - [0:0]
--A FORWARD -j DOCKER-FORWARD
--A DOCKER ! -i br-309f9ae3f545 -o br-309f9ae3f545 -j DROP
--A DOCKER ! -i docker0 -o docker0 -j DROP
--A DOCKER-BRIDGE -o br-309f9ae3f545 -j DOCKER
--A DOCKER-BRIDGE -o docker0 -j DOCKER
--A DOCKER-FORWARD -j DOCKER-BRIDGE
--A DOCKER-FORWARD -i br-309f9ae3f545 -j ACCEPT
--A DOCKER-FORWARD -i br-362465bc55a2 -o br-362465bc55a2 -j ACCEPT
--A DOCKER-FORWARD -i docker0 -j ACCEPT
-COMMIT
-`,
+					stdout:  rulesWithoutIPTablesHint,
 				},
 				{
 					command: "/sbin/ip6tables-nft-save -t mangle",
@@ -283,6 +292,76 @@ COMMIT
 			mode := DetectMode(t.Context(), fexec, "/sbin")
 			if mode != tc.mode {
 				t.Errorf("Expected mode %q got %q", tc.mode, mode)
+			}
+		})
+	}
+}
+
+func fakeExecForReader(reader io.Reader) *fakeexec.FakeExec {
+	fexec := &fakeexec.FakeExec{CommandScript: make([]fakeexec.FakeCommandAction, 4)}
+	// DetectMode runs up to 4 iptables commands; we use reader only for the first
+	for i := range 4 {
+		var rc io.ReadCloser
+		if i == 0 {
+			rc = io.NopCloser(reader)
+		} else {
+			rc = io.NopCloser(&bytes.Buffer{})
+		}
+		fexec.CommandScript[i] = func(cmd string, args ...string) utilexec.Cmd {
+			return &fakeexec.FakeCmd{
+				RunScript: []fakeexec.FakeAction{func() ([]byte, []byte, error) { return nil, nil, nil }},
+				StdoutPipeResponse: fakeexec.FakeStdIOPipeResponse{
+					ReadCloser: rc,
+				},
+			}
+		}
+	}
+	return fexec
+}
+
+func Test_execAndScanForKubeletChains(t *testing.T) {
+	matching := &bytes.Buffer{}
+	nonMatching := &bytes.Buffer{}
+	for matching.Len() < 16384 {
+		_, _ = matching.WriteString(rulesWithoutIPTablesHint)
+		_, _ = nonMatching.WriteString(rulesWithoutIPTablesHint)
+	}
+	// Write the block with the hint only to matching
+	_, _ = matching.WriteString(rulesWithIPTablesHint)
+	for matching.Len() < 65536 {
+		_, _ = matching.WriteString(rulesWithoutIPTablesHint)
+		_, _ = nonMatching.WriteString(rulesWithoutIPTablesHint)
+	}
+
+	testCases := []struct {
+		name      string
+		buf       *bytes.Buffer
+		expectEOF bool
+	}{
+		{
+			name:      "DetectMode stops before EOF on a match",
+			buf:       matching,
+			expectEOF: false,
+		},
+		{
+			name:      "DetectMode reads to EOF when no match",
+			buf:       nonMatching,
+			expectEOF: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fexec := fakeExecForReader(tc.buf)
+			mode := DetectMode(t.Context(), fexec, "/sbin")
+			if mode != NFTMode {
+				t.Errorf("Expected mode %q got %q", NFTMode, mode)
+			}
+
+			reachedEOF := tc.buf.Len() == 0
+			if tc.expectEOF && !reachedEOF {
+				t.Errorf("failed to read all input with non-matching data")
+			} else if !tc.expectEOF && reachedEOF {
+				t.Errorf("read all of the input despite matching data")
 			}
 		})
 	}
