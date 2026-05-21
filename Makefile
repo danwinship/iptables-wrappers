@@ -21,7 +21,10 @@ fmt: ## Check formatting
 	exit 1; \
 	fi
 
-check: check-debian check-fedora check-alpine
+check: check-unit check-debian check-fedora check-alpine
+
+check-unit:
+	$(GO) test -count=1 ./...
 
 check-debian: build
 	./test/run-test.sh debian
