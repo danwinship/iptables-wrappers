@@ -48,6 +48,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	utilexec "k8s.io/utils/exec"
+
 	"sigs.k8s.io/iptables-wrappers/pkg/xtables"
 )
 
@@ -59,14 +61,16 @@ func main() {
 		return
 	}
 
-	sbinPath, err := xtables.DetectBinaryDir()
+	execer := utilexec.New()
+
+	sbinPath, err := xtables.DetectBinaryDir(execer)
 	if err != nil {
 		fatal(err)
 	}
 
 	// We use `xtables-<mode>-multi` binaries by default to inspect the installed rules,
 	// but this can be changed to directly use `iptables-<mode>-save` binaries.
-	mode := xtables.DetectMode(ctx, sbinPath)
+	mode := xtables.DetectMode(ctx, execer, sbinPath)
 
 	// This re-executes the exact same command passed to this program
 	binaryPath := os.Args[0]
@@ -75,16 +79,16 @@ func main() {
 		args = os.Args[1:]
 	}
 
-	if err := setIPTablesAlternative(ctx, mode, sbinPath); err != nil {
+	if err := setIPTablesAlternative(ctx, execer, mode, sbinPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to redirect iptables binaries. (Are you running in an unprivileged pod?): %s\n", err)
 		// fake it, though this will probably also fail if they aren't root
 		binaryPath = xtables.MultiBinaryPath(sbinPath, mode)
 		args = os.Args
 	}
 
-	cmdIPTables := exec.CommandContext(ctx, binaryPath, args...)
-	cmdIPTables.Stdout = os.Stdout
-	cmdIPTables.Stderr = os.Stderr
+	cmdIPTables := execer.CommandContext(ctx, binaryPath, args...)
+	cmdIPTables.SetStdout(os.Stdout)
+	cmdIPTables.SetStderr(os.Stderr)
 
 	if err := cmdIPTables.Run(); err != nil {
 		code := 1
@@ -102,21 +106,21 @@ func main() {
 }
 
 // setIPTablesAlternative updates the system to use the given iptables mode
-func setIPTablesAlternative(ctx context.Context, mode xtables.Mode, sbinPath string) error {
+func setIPTablesAlternative(ctx context.Context, execer utilexec.Interface, mode xtables.Mode, sbinPath string) error {
 	modeStr := string(mode)
 
-	if path, _ := exec.LookPath(filepath.Join(sbinPath, "alternatives")); path != "" {
+	if path, _ := execer.LookPath(filepath.Join(sbinPath, "alternatives")); path != "" {
 		// Fedora-style "alternatives".
-		if out, err := exec.CommandContext(ctx, "alternatives", "--set", "iptables", filepath.Join(sbinPath, "iptables-"+string(mode))).CombinedOutput(); err != nil {
+		if out, err := execer.CommandContext(ctx, "alternatives", "--set", "iptables", filepath.Join(sbinPath, "iptables-"+string(mode))).CombinedOutput(); err != nil {
 			return fmt.Errorf("alternatives to update iptables to mode %s: %v: %s", string(mode), err, out)
 		}
 		return nil
-	} else if path, _ := exec.LookPath(filepath.Join(sbinPath, "update-alternatives")); path != "" {
+	} else if path, _ := execer.LookPath(filepath.Join(sbinPath, "update-alternatives")); path != "" {
 		// Debian-style "update-alternatives".
-		if out, err := exec.CommandContext(ctx, "update-alternatives", "--set", "iptables", filepath.Join(sbinPath, "iptables-"+modeStr)).CombinedOutput(); err != nil {
+		if out, err := execer.CommandContext(ctx, "update-alternatives", "--set", "iptables", filepath.Join(sbinPath, "iptables-"+modeStr)).CombinedOutput(); err != nil {
 			return fmt.Errorf("update-alternatives iptables to mode %s: %v: %s", modeStr, err, out)
 		}
-		if out, err := exec.CommandContext(ctx, "update-alternatives", "--set", "ip6tables", filepath.Join(sbinPath, "ip6tables-"+modeStr)).CombinedOutput(); err != nil {
+		if out, err := execer.CommandContext(ctx, "update-alternatives", "--set", "ip6tables", filepath.Join(sbinPath, "ip6tables-"+modeStr)).CombinedOutput(); err != nil {
 			return fmt.Errorf("update-alternatives ip6tables to mode %s: %v: %s", modeStr, err, out)
 		}
 		return nil
