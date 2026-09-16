@@ -59,19 +59,19 @@ func TestDetectMode(t *testing.T) {
 			name: "iptables broken",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					err:     fmt.Errorf("oh noes!"),
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					err:     fmt.Errorf("oh noes!"),
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					err:     fmt.Errorf("oh noes!"),
 				},
 				{
-					command: "/sbin/xtables-legacy-multi ip6tables-save",
+					command: "/sbin/ip6tables-legacy-save",
 					err:     fmt.Errorf("oh noes!"),
 				},
 			},
@@ -81,19 +81,19 @@ func TestDetectMode(t *testing.T) {
 			name: "no rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi ip6tables-save",
+					command: "/sbin/ip6tables-legacy-save",
 					stdout:  "",
 				},
 			},
@@ -103,15 +103,15 @@ func TestDetectMode(t *testing.T) {
 			name: "old legacy rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  ":KUBE-KUBELET-CANARY - [0:0]\n",
 				},
 			},
@@ -121,15 +121,15 @@ func TestDetectMode(t *testing.T) {
 			name: "new legacy rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
@@ -139,7 +139,7 @@ func TestDetectMode(t *testing.T) {
 			name: "old nft rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  ":KUBE-KUBELET-CANARY - [0:0]\n",
 				},
 			},
@@ -149,7 +149,7 @@ func TestDetectMode(t *testing.T) {
 			name: "new nft rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
@@ -159,15 +159,15 @@ func TestDetectMode(t *testing.T) {
 			name: "legacy, no ipv6",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					err:     fmt.Errorf("blah blah no ipv6"),
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
@@ -177,19 +177,19 @@ func TestDetectMode(t *testing.T) {
 			name: "legacy, ipv6-only",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi ip6tables-save",
+					command: "/sbin/ip6tables-legacy-save",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
@@ -199,11 +199,11 @@ func TestDetectMode(t *testing.T) {
 			name: "nft, ipv6-only",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
@@ -213,7 +213,7 @@ func TestDetectMode(t *testing.T) {
 			name: "nft, lots of rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  `# Blah blah blah
 *filter
 :INPUT ACCEPT [0:0]
@@ -242,7 +242,7 @@ COMMIT
 			name: "non-Kubernetes nft rules, Kubernetes legacy rules",
 			commands: []testCommand{
 				{
-					command: "/sbin/xtables-nft-multi iptables-save -t mangle",
+					command: "/sbin/iptables-nft-save -t mangle",
 					stdout:  `# Blah blah blah
 *filter
 :INPUT ACCEPT [0:0]
@@ -264,11 +264,11 @@ COMMIT
 `,
 				},
 				{
-					command: "/sbin/xtables-nft-multi ip6tables-save -t mangle",
+					command: "/sbin/ip6tables-nft-save -t mangle",
 					stdout:  "",
 				},
 				{
-					command: "/sbin/xtables-legacy-multi iptables-save",
+					command: "/sbin/iptables-legacy-save",
 					stdout:  ":KUBE-IPTABLES-HINT - [0:0]\n",
 				},
 			},
