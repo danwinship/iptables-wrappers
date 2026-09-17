@@ -171,34 +171,12 @@ type runner struct {
 	protocol Protocol
 }
 
-// newInternal returns a new Interface which will exec iptables
-func newInternal(exec utilexec.Interface, protocol Protocol) Interface {
-	runner := &runner{
+// New returns a new Interface which will exec iptables.
+func New(exec utilexec.Interface, protocol Protocol) Interface {
+	return &runner{
 		exec:     exec,
 		protocol: protocol,
 	}
-
-	return runner
-}
-
-// New returns a new Interface which will exec iptables.
-// Note that this function will return a single iptables Interface *and* an error, if only
-// a single family is supported.
-func New(protocol Protocol) Interface {
-	return newInternal(utilexec.New(), protocol)
-}
-
-func newDualStackInternal(exec utilexec.Interface) map[Protocol]Interface {
-	interfaces := map[Protocol]Interface{}
-	iptv4 := newInternal(exec, ProtocolIPv4)
-	if presentErr := iptv4.Present(); presentErr == nil {
-		interfaces[ProtocolIPv4] = iptv4
-	}
-	iptv6 := newInternal(exec, ProtocolIPv6)
-	if presentErr := iptv6.Present(); presentErr == nil {
-		interfaces[ProtocolIPv6] = iptv6
-	}
-	return interfaces
 }
 
 // NewBestEffort returns a map containing an IPv4 Interface (if IPv4 iptables is
@@ -206,8 +184,17 @@ func newDualStackInternal(exec utilexec.Interface) map[Protocol]Interface {
 // supported, then it just returns an empty map. This function is intended to make things
 // simple for callers that just want "best-effort" iptables support, where neither partial
 // nor complete lack of iptables support is considered an error.
-func NewBestEffort() map[Protocol]Interface {
-	return newDualStackInternal(utilexec.New())
+func NewBestEffort(exec utilexec.Interface) map[Protocol]Interface {
+	interfaces := map[Protocol]Interface{}
+	iptv4 := New(exec, ProtocolIPv4)
+	if presentErr := iptv4.Present(); presentErr == nil {
+		interfaces[ProtocolIPv4] = iptv4
+	}
+	iptv6 := New(exec, ProtocolIPv6)
+	if presentErr := iptv6.Present(); presentErr == nil {
+		interfaces[ProtocolIPv6] = iptv6
+	}
+	return interfaces
 }
 
 // IsIPv6 is part of Interface.
